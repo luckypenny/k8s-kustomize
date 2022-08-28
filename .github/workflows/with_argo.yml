@@ -1,0 +1,24 @@
+name: Work With Argo
+
+on:
+  push:
+    branches:
+      - develop
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: argo
+      - name: Merge
+        run: |
+          git config --global user.email "@luckypenny79"
+          git config --global user.name ${GITHUB_ACTOR}
+          git pull origin develop  --allow-unrelated-histories --no-rebase --no-edit
+  
+          echo "check kustomize build"
+          
+          kustomize build k8sapps/argo/prod 1>/dev/null
+        
+          git push origin argo

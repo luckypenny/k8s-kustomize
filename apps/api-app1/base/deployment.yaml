@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app1
+  labels:
+    app: api-app1
+spec:
+  replicas: 1
+  minReadySeconds: 20
+  strategy:
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: api-app1
+  template:
+    metadata:
+      labels:
+        app: api-app1
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/actuator/prometheus'
+        prometheus.io/port: '5000'
+    spec:
+      containers:
+        - name: app
+          image: app
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            periodSeconds: 1
+            initialDelaySeconds: 30
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          livenessProbe:
+            periodSeconds: 3
+            initialDelaySeconds: 30
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          resources:
+            requests:
+              memory: "500Mi"
+            limits:
+              memory: "1Gi"
+          envFrom:
+            - configMapRef:
+                name: kafka-configmap
+            - configMapRef:
+                name: rdb-configmap
+            - configMapRef:
+                name: redis-api-configmap
+            - secretRef:
+                name: rdb-secret
+            - secretRef:
+                name: tsdb-secret
+          env:
+            - name: SERVER_PORT
+              value: "5000"

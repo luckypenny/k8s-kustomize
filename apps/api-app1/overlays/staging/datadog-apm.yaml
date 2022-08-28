@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-important
+  labels:
+    tags.datadoghq.com/service: api-app1
+    tags.datadoghq.com/env: staging
+    tags.datadoghq.com/version: GIT-0540f3c
+spec:
+  selector:
+    matchLabels:
+      environment: staging
+  template:
+    metadata:
+      labels:
+        tags.datadoghq.com/service: api-app1
+        tags.datadoghq.com/env: staging
+        tags.datadoghq.com/version: GIT-0540f3c
+    spec:
+      volumes:
+        - name: shared-volume
+          emptyDir: {}
+      containers:
+        - name: app
+          volumeMounts:
+            - mountPath: /opt/agent
+              name: shared-volume
+              readOnly: true
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: |-
+                -javaagent:/opt/agent/apm-agent.jar
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_SERVICE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
+            - name: DD_PROFILING_ENABLED
+              value: "true"
+            - name: DD_LOGS_INJECTION
+              value: "true"
+            - name: DD_TRACE_ENABLED
+              value: "true"
+            - name: DD_JMXFETCH_ENABLED
+              value: "true"
+      initContainers:
+        - name: init-agent
+          image: ghcr.io/luckypenny/datadog-apm:v1
+          volumeMounts:
+            - mountPath: /shared/volume
+              name: shared-volume

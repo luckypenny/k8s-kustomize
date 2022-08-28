@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app1
+  annotations:
+    sidecar.jaegertracing.io/inject: "true"
+spec:
+  replicas: 6
+  minReadySeconds: 20
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: api-app1
+  template:
+    metadata:
+      labels:
+        app: api-app1
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/actuator/prometheus'
+        prometheus.io/port: '5000'
+        ad.datadoghq.com/app.logs: '[{"source":"java","service":"api-app1"}]'
+    spec:
+      containers:
+        - name: app
+          readinessProbe:
+            timeoutSeconds: 3
+            periodSeconds: 5
+            initialDelaySeconds: 25
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          livenessProbe:
+            timeoutSeconds: 5
+            periodSeconds: 10
+            initialDelaySeconds: 30
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          resources:
+            requests:
+              memory: "4Gi"
+            limits:
+              memory: "4Gi"
+          envFrom:
+            - configMapRef:
+                name: kafka-configmap
+            - configMapRef:
+                name: rdb-configmap
+            - configMapRef:
+                name: redis-configmap
+            - secretRef:
+                name: rdb-secret
+            - secretRef:
+                name: tsdb-secret
+          env:
+            - name: APP_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PSQL_URL
+              value: "$(TSDB_WRITE_HOST)&ApplicationName=$(APP_NAME)"
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production,k8s"
+      nodeSelector:
+        deploy-env: prod
+        role: worker
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: api-app1
+              weight: 100

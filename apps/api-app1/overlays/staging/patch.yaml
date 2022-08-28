@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app1
+spec:
+  replicas: 2
+  minReadySeconds: 10
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: api-app1
+  template:
+    metadata:
+      labels:
+        app: api-app1
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/actuator/prometheus'
+        prometheus.io/port: '5000'
+        ad.datadoghq.com/app.logs: '[{"source":"java","service":"api-app1"}]'
+    spec:
+      containers:
+        - name: app
+          readinessProbe:
+            periodSeconds: 1
+            initialDelaySeconds: 20
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          livenessProbe:
+            periodSeconds: 3
+            initialDelaySeconds: 20
+            httpGet:
+              path: /actuator/health
+              port: 5000
+          resources:
+            requests:
+              memory: "2Gi"
+            limits:
+              memory: "2Gi"
+          envFrom:
+            - configMapRef:
+                name: kafka-configmap
+            - configMapRef:
+                name: rdb-configmap
+            - configMapRef:
+                name: redis-api-configmap
+            - secretRef:
+                name: rdb-secret
+            - secretRef:
+                name: tsdb-secret
+          env:
+            - name: APP_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PSQL_URL
+              value: "$(TSDB_WRITE_HOST)?ApplicationName=$(APP_NAME)"
+            - name: SPRING_PROFILES_ACTIVE
+              value: "staging,k8s"
+      nodeSelector:
+        deploy-env: staging
+        role: worker
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: api-app1
+              weight: 100
